@@ -28,14 +28,16 @@ class MinimalPublisher(Node):
         #self.barometerEnabled = False
         
         self.enable(barometer=False)
-        self.lis3mdl.calibrate_magnet(iterations=500)
-        self.lsm6ds33.calibrate_gyro(iterations=200)
+        self.lis3mdl.calibrate_magnet(iterations=1000)
+        self.lsm6ds33.calibrate_gyro(iterations=500)
 
-        self.publisher_ = self.create_publisher(Float32MultiArray, '/position/test', 10)
+        freq = 50
+
+        self.publisher_ = self.create_publisher(Float32MultiArray, '/position/test', freq)
         self.timer = self.create_timer(0.1, self.timer_callback)
         
-        #self.orientation = Madgwick(frequency=10)
-        self.orientation = Mahony(frequency=10)
+        self.orientation = Madgwick(frequency=freq)
+        #self.orientation = Mahony(frequency=freq)
         self.Q = np.array([1., 0., 0., 0.])
         self.oldQ = self.Q
 
@@ -46,6 +48,8 @@ class MinimalPublisher(Node):
         self.RPY_cal = [0, 0, 0]
         self.is_RPY_calibrated = False
         self.calibrate_RPY(iterations=200)
+        self.oldRPY = np.array([0, 0, 0])
+        self.sumRPY = np.array([0, 0, 0])
     
     def __del__(self):
         del(self.lsm6ds33)
@@ -80,9 +84,12 @@ class MinimalPublisher(Node):
 
         if ((self.count % 2 == 0) & (self.count >= self.MAF)):
             RPY = np.sum(self.bufferRPY, 1) / self.MAF
-            #print(RPY)
             msg.data = [float(i * 180/math.pi) for i in RPY]
             self.publisher_.publish(msg)
+
+            self.sumRPY = np.add(self.sumRPY, np.subtract(msg.data, self.oldRPY))
+            #print(self.sumRPY)
+            self.oldRPY = msg.data
 
         self.count = self.count + 1
 
@@ -94,13 +101,13 @@ class MinimalPublisher(Node):
 
         #accGravity = get_accel_g_forces()
         accAngles = self.lsm6ds33.get_accel_linear_velocity()
-        gyroAngles = self.lsm6ds33.get_gyro_angular_velocity()
+        gyrAngles = self.lsm6ds33.get_gyro_angular_velocity()
 
-        #self.get_logger().info('accAngles: "%s and %s and %s"' % (accAngles[0], accAngles[1], accAngles[2]))
-        #self.get_logger().info('gyroAngles: "%s and %s and %s"' % (gyroAngles[0], gyroAngles[1], gyroAngles[2]))
+        self.get_logger().info('accAngles: "%s and %s and %s"' % (accAngles[0], accAngles[1], accAngles[2]))
+        self.get_logger().info('gyroAngles: "%s and %s and %s"' % (gyrAngles[0], gyrAngles[1], gyrAngles[2]))
         self.get_logger().info('magAngles: "%s and %s and %s"' % (magAngles[0], magAngles[1], magAngles[2]))
 
-        self.Q = self.orientation.updateMARG(self.oldQ, gyroAngles, accAngles, magAngles)
+        self.Q = self.orientation.updateMARG(self.oldQ, gyr=gyrAngles, acc=accAngles, mag=magAngles)
         self.oldQ = self.Q
         RPY = Quaternion(self.Q).to_angles()
 

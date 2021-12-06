@@ -87,6 +87,7 @@ class LIS3MDL(I2C):
             raise(Exception('Magnetometer is not enabled'))
 
         sensor_data = self.read_3d_sensor(LIS3MDL_ADDR, self.magnetometer_registers)
+        sensor_data = np.array(sensor_data) * pow(10,9)
 
         if self.is_magnet_calibrated:
             calibrated_magnet_data = [0, 0, 0]

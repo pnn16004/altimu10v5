@@ -136,6 +136,8 @@ class LSM6DS33(I2C):
         gyro_data = self.get_gyro_raw()
 
         gyro_data[0] *= GYRO_GAIN / 1000 * math.pi/180
+        gyro_data[1] *= GYRO_GAIN / 1000 * math.pi/180
+        gyro_data[2] *= GYRO_GAIN / 1000 * math.pi/180
 
         return gyro_data
 
