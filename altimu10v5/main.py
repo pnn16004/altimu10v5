@@ -10,7 +10,6 @@ from submodules.lis3mdl import LIS3MDL
 
 from ahrs.filters import Madgwick
 from ahrs.filters import Mahony
-from ahrs.filters import Complementary
 from ahrs.common import Quaternion
 
 import math
@@ -34,14 +33,13 @@ class MinimalPublisher(Node):
         self.lis3mdl.calibrate_magnet(iterations=1000)
         self.lsm6ds33.calibrate_gyro(iterations=500)
 
-        freq = 50
+        freq = 10
 
-        self.publisher_ = self.create_publisher(Float32MultiArray, '/position/test', freq)
-        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.publisher_ = self.create_publisher(Float32MultiArray, '/position/test', 50)
+        self.timer = self.create_timer(1/freq, self.timer_callback)
         
         #self.orientation = Madgwick(frequency=freq)
-        #self.orientation = Mahony(frequency=freq)
-        self.orientation = Complementary(frequency=freq)
+        self.orientation = Mahony(frequency=freq)
         self.Q = np.array([1., 0., 0., 0.])
         self.oldQ = self.Q
 
@@ -52,10 +50,6 @@ class MinimalPublisher(Node):
         self.RPY_cal = [0, 0, 0] #Calibration values for RPY
         self.is_RPY_calibrated = False
         self.calibrate_RPY(iterations=200)
-
-        #Test
-        self.oldRPY = np.array([0, 0, 0])
-        self.sumRPY = np.array([0, 0, 0])
     
     def __del__(self):
         del(self.lsm6ds33)
@@ -93,16 +87,12 @@ class MinimalPublisher(Node):
         if ((self.count % 2 == 0) & (self.count >= self.MAF)):
             #Average and convert to degrees
             RPY = np.sum(self.bufferRPY, 1) / self.MAF
-            RPY = [float(i * 180/math.pi) for i in RPY]
-
-            #Test
-            self.sumRPY = np.add(self.sumRPY, np.subtract(RPY, self.oldRPY))
-            self.oldRPY = RPY
-            #print(self.sumRPY)
+            RPY = [i * 180/math.pi for i in RPY]
 
             #Publish
-            msg.data = [RPY, acc]
+            msg.data = [float(i) for i in RPY + acc.tolist()] 
             self.publisher_.publish(msg)
+            #print(msg.data)
 
         self.count = self.count + 1
 
@@ -118,19 +108,22 @@ class MinimalPublisher(Node):
         accAngles = self.lsm6ds33.get_accel_linear_velocity()
         gyrAngles = self.lsm6ds33.get_gyro_angular_velocity()
 
-        self.get_logger().info('accAngles: "%s and %s and %s"' % (accAngles[0], accAngles[1], accAngles[2]))
-        self.get_logger().info('gyroAngles: "%s and %s and %s"' % (gyrAngles[0], gyrAngles[1], gyrAngles[2]))
-        self.get_logger().info('magAngles: "%s and %s and %s"' % (magAngles[0], magAngles[1], magAngles[2]))
+        #self.get_logger().info('accAngles: "%s and %s and %s"' % (accAngles[0], accAngles[1], accAngles[2]))
+        #self.get_logger().info('gyroAngles: "%s and %s and %s"' % (gyrAngles[0], gyrAngles[1], gyrAngles[2]))
+        #self.get_logger().info('magAngles: "%s and %s and %s"' % (magAngles[0], magAngles[1], magAngles[2]))
 
         #Calculate quaternion and RPY using AHRS sensor fusion
+
         self.Q = self.orientation.updateMARG(self.oldQ, gyr=gyrAngles, acc=accAngles, mag=magAngles)
         self.oldQ = self.Q
-        RPY = Quaternion(self.Q).to_angles()
+
+        Quat = Quaternion(self.Q)
+        RPY = Quat.to_angles()
 
         if self.is_RPY_calibrated:
             RPY -= self.RPY_cal
 
-        acc = self.Q.rotate(accAngles) #Linear acceleration in the world
+        acc = Quat.rotate(accAngles) #Linear acceleration in the world
 
         return RPY, acc
 
