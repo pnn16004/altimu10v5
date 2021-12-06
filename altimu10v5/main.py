@@ -42,7 +42,7 @@ class MinimalPublisher(Node):
         self.oldQ = self.Q
 
         self.count = 0
-        self.MAF = 4;
+        self.MAF = 4
         self.bufferRPY = np.empty((3,0), float)
         
         self.RPY_cal = [0, 0, 0]
