@@ -90,7 +90,7 @@ class MinimalPublisher(Node):
             RPY = [i * 180/math.pi for i in RPY]
 
             #Publish
-            msg.data = [float(i) for i in RPY + acc.tolist()] 
+            msg.data = [float(i) for i in RPY.reverse() + acc.tolist()] 
             self.publisher_.publish(msg)
             #print(msg.data)
 
